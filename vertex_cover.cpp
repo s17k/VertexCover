@@ -16,7 +16,6 @@ typedef tuple <VertexList, VertexList, VertexList> Crown;
 #define CROWN_NULL make_tuple(VERTEX_LIST_NULL, VERTEX_LIST_NULL, VERTEX_LIST_NULL)
 
 void debug_vl(VertexList& li) {
-	cerr << "	";
 	for(int v: li)
 		cerr << v << " ";
 	cerr << endl;
@@ -55,13 +54,13 @@ struct Graph {
 
 	void debug(string msg) {
 		cerr << "Graph structure of " << msg << endl;
-		cerr << "	vertexes: ";
+		cerr << "vertexes: ";
 		for(int v: vertexes)
 			cerr << v << " ";
 		cerr << endl;
-		cerr << "	edges: " << endl;
+		cerr << "edges: " << endl;
 		for(int v: vertexes) {
-			cerr << "	" << v << ": ";
+			cerr << v << ": ";
 			for(int w: adj[v]) 
 				cerr << w << " ";
 			cerr << endl;
@@ -126,7 +125,7 @@ struct Graph {
 
 	Matching turbo_matching(vector<int> left_set) {	
 		unordered_map<int,bool> visited;
-		unordered_map<int,bool> matched_with;
+		unordered_map<int,int> matched_with;
 
 		function<bool(int)> find_matching_path = [&](int start_vertex) {
 			visited[start_vertex] = true;
@@ -151,7 +150,7 @@ struct Graph {
 
 		while(true) {
 			for(int v: vertexes)
-				visited[v] = true;
+				visited[v] = false;
 
 			bool found_one = false;
 
@@ -173,7 +172,7 @@ struct Graph {
 		return answer;
 	}
 
-	Matching ls_general_matching() {
+	Matching count_inclusive_matching() {
 		unordered_map<int, bool> added;
 		Matching answer;
 
@@ -182,6 +181,7 @@ struct Graph {
 				added[v] = true;
 				added[w] = true;
 				answer.emplace_back(v,w);
+				break;
 			}
 		}
 		return answer;
@@ -193,7 +193,10 @@ struct Graph {
 
 	VertexList k_vertex_cover(int k) {
 		VertexList cover;
-		k_vertex_cover_kernel(k, cover).k_vertex_cover_easy(k, cover);
+		auto kernel = k_vertex_cover_kernel(k, cover);
+		kernel.k_vertex_cover_easy(k-cover.size(), cover);
+		if((int)cover.size() > k or k > (int)vertexes.size())
+			return VERTEX_LIST_NULL;
 		return cover;
 	}
 
@@ -253,11 +256,17 @@ struct Graph {
 
 	
 	Crown crown_decomposition(int k) {
-		Matching inclusive_matching = ls_general_matching();
-		cerr << "I am counting the inclusive matching " << endl;
+		Matching inclusive_matching = count_inclusive_matching();
+		cerr << "inclusive matching " << endl;
+
+		for(auto p: inclusive_matching) {
+			cerr << "(" << p.first << "," << p.second << ") ";
+		}
+		cerr << endl;
 
 
 		if((int)inclusive_matching.size() > k) {
+			cerr << "The inc matching is too big " << endl;
 			return CROWN_NULL;
 		}
 
@@ -271,23 +280,42 @@ struct Graph {
 			M.push_back(p.second);
 		}
 
+		cerr << "M" << endl;
+		debug_vl(M);
+
 		Graph bipartialIM = Graph();
 		bipartialIM.vertexes = vertexes;
 
-		for(int v: vertexes) if(inM[v]) {
-			for(int w: adj[v]) if(!inM[w]) {
+
+		for(int v: vertexes) {
+			for(int w: adj[v]) if(inM[v] != inM[w]) {
 				bipartialIM.adj[v].push_back(w);
 			}
 		}
 
+		bipartialIM.debug("bipartial between I and M");
+
 		Matching IM_matching = bipartialIM.turbo_matching(M);
+		
+		cerr << "IM_turbo_matching " << endl;
+		for(auto p: IM_matching) {
+			cerr << "(" << p.first << "," << p.second << ") ";
+		}
+		cerr << endl;
+
+
 
 		if((int)IM_matching.size() > k) {
+			cerr << "IM_Matching is too big " << endl;
 			return CROWN_NULL;
 		} 
 
 		VertexList X = vertex_cover_from_matching(IM_matching);
-		unordered_map<bool, int> inX, inHC;
+
+		cerr << "X" << endl;
+		debug_vl(X);
+
+		unordered_map<int, bool> inX, inHC;
 		
 		for(int v: X)
 			inX[v] = 1;
@@ -313,6 +341,8 @@ struct Graph {
 	}
 
 	void k_vertex_cover_easy(int k, VertexList& cover_result) {
+		debug("easy " + to_string(k) + " cover");
+
 		#define end_with_null \
 			cover_result.clear(); \
 			cover_result.push_back(-1); \
@@ -338,6 +368,7 @@ struct Graph {
 
 		// let's add r neighbours to the cover
 		
+		cerr << "wyrzucam z sasiadami " << r << endl;
 		vector<int> second_cover_result = cover_result;
 
 		Graph nowy = *this;
@@ -362,6 +393,8 @@ struct Graph {
 		}
 		
 		// let's add r to the cover
+		
+		cerr << "wyrzucam samego " << r << endl;
 		vector<int> first_cover_result = cover_result;
 		first_cover_result.push_back(r);
 
@@ -401,13 +434,15 @@ int main () {
 
 	VertexList ans = G.k_vertex_cover(k);
 
-	if(ans == VERTEX_LIST_NULL) {
-		cout << "Pokrycie o " << k << " wierzcholkach nie istnieje " << endl;  
+	if(ans == VERTEX_LIST_NULL)  {
+		cerr << "Pokrycie o " << k << " wierzcholkach nie istnieje " << endl;  
+		cout << "NIE\n";
 	} else {
-		cout << "Pokrycie o " << k << " wierzcholkach istnieje: " << endl;
+		cerr << "Pokrycie o " << k << " wierzcholkach istnieje: " << endl;
 		for(int v: ans) {
-			cout << v << " ";
+			cerr << v << " ";
 		}
-		cout << endl;
+		cerr << endl;
+		cout << "TAK\n";
 	}
 }
