@@ -45,6 +45,8 @@ struct Graph {
 	}	
 
 	void erase_vertex(int v) {
+		if(find(vertexes.begin(), vertexes.end(), v) == vertexes.end())
+			return;
 		vertexes.erase(find(vertexes.begin(), vertexes.end(), v));
 		for(int w: adj[v]) {
 			adj[w].erase(find(adj[w].begin(), adj[w].end(), v));
@@ -106,15 +108,33 @@ struct Graph {
 	VertexList vertex_cover_from_matching(Matching matching) {
 		VertexList answer;
 		answer.reserve(matching.size());
+
+		unordered_map<int,bool> inMatching;
+		for(auto p: matching) {
+			inMatching[p.first] = 1;
+			inMatching[p.second] = 1;
+		}
+
 		for(auto p: matching) {
 			int v = p.first;
 			int w = p.second;
 			int to_add = -1;
-			if(adj[v].size() == 1) {
+
+			auto count_not_paired_deg = [&](int v) {
+				int res = 0;
+				for(int w: adj[v]) {
+					if(!inMatching[w])
+						res++;
+				}
+				return res;
+			};
+
+			if(count_not_paired_deg(v) == 0) {
 				to_add = w;
-			} else if(adj[w].size() == 1) {
+			} else if(count_not_paired_deg(w) == 0) {
 				to_add = v;
 			} else {
+				cerr << "v: " << v << " w: " << w << endl; 
 				cerr << "ERROR: MATCHING IS NOT MAXIMAL\n";
 			}
 			assert(to_add != -1);
@@ -193,10 +213,35 @@ struct Graph {
 
 	VertexList k_vertex_cover(int k) {
 		VertexList cover;
-		auto kernel = k_vertex_cover_kernel(k, cover);
+		int n = vertexes.size();
+		Graph graph = *this;
+		auto kernel = graph.k_vertex_cover_kernel(k, cover);
+		
+		cerr << "Cover from kernelization" << endl;
+		debug_vl(cover);
+
 		kernel.k_vertex_cover_easy(k-cover.size(), cover);
-		if((int)cover.size() > k or k > (int)vertexes.size())
+
+		if(cover == VERTEX_LIST_NULL or k > n)
 			return VERTEX_LIST_NULL;
+
+		assert((int)cover.size() <= k);
+
+		cerr << "final cover_size = " << cover.size() << endl;
+		cerr << "k: " << k << endl;
+
+		if((int)cover.size() < k) {
+			map<int, bool> inCover;
+			for(int v: cover) inCover[v] = true;
+			for(int v: vertexes) {
+				if(!inCover[v]) {
+					cover.push_back(v);
+				}
+				if(k == (int)cover.size())
+					break;
+			}
+		}
+
 		return cover;
 	}
 
@@ -310,7 +355,7 @@ struct Graph {
 			return CROWN_NULL;
 		} 
 
-		VertexList X = vertex_cover_from_matching(IM_matching);
+		VertexList X = bipartialIM.vertex_cover_from_matching(IM_matching);
 
 		cerr << "X" << endl;
 		debug_vl(X);
@@ -348,13 +393,10 @@ struct Graph {
 			cover_result.push_back(-1); \
 			return;
 		
-		if(is_null()) {
+		if(is_null() or k < 0) {
 			end_with_null;
 		}
-		if(vertexes.size() == 0 and k == 0) return;
-		if(vertexes.size() == 0) {
-			end_with_null;
-		}
+		if(vertexes.size() == 0 and k >= 0)  return;
 
 		pair<int,int> max_deg_vertex = {-1,-1};
 		for(int v: vertexes)
@@ -362,6 +404,8 @@ struct Graph {
 
 		if(max_deg_vertex.first > 0 and k <= 0) {
 			end_with_null;
+		} else if(max_deg_vertex.first == 0) {
+			return;
 		}
 
 		int r = max_deg_vertex.second;
@@ -372,13 +416,14 @@ struct Graph {
 		vector<int> second_cover_result = cover_result;
 
 		Graph nowy = *this;
+	
+		int new_k = k;
+		for(int w: adj[r]) if(find(second_cover_result.begin(), second_cover_result.end(), w) == second_cover_result.end()) {
+			second_cover_result.push_back(w);
+			new_k--;
+		}
 
 		for(int w: adj[r])
-			second_cover_result.push_back(w);
-
-		int new_k = k - adj[r].size() - 1;
-
-		for(int w: adj[r]) 
 			nowy.erase_vertex(w);
 		
 		nowy.erase_vertex(r);
@@ -413,6 +458,7 @@ struct Graph {
 			return;
 		}
 
+		end_with_null;
 	}	
 
 };
